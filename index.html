@@ -8,14 +8,11 @@
 
     <title>Industrie 4.0 AR – P-101</title>
 
-    <!-- A-Frame -->
     <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
 
-    <!-- AR.js -->
     <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.min.js"></script>
 
     <style>
-
         * {
             box-sizing: border-box;
         }
@@ -35,8 +32,6 @@
             object-fit: contain !important;
         }
 
-        /* AR-Datenfenster */
-
         #overlay {
             display: none;
             position: fixed;
@@ -44,18 +39,13 @@
             left: 50%;
             transform: translateX(-50%);
             z-index: 10;
-
             width: 90%;
             max-width: 440px;
-
             padding: 18px;
-
             border: 1px solid rgba(0,255,150,0.6);
             border-radius: 14px;
-
             background: rgba(0,0,0,0.88);
             backdrop-filter: blur(8px);
-
             box-shadow: 0 0 20px rgba(0,255,150,0.2);
         }
 
@@ -76,9 +66,7 @@
             justify-content: space-between;
             align-items: center;
             gap: 10px;
-
             padding: 14px 4px;
-
             border-bottom: 1px solid rgba(255,255,255,0.15);
         }
 
@@ -108,25 +96,19 @@
             left: 50%;
             transform: translateX(-50%);
             z-index: 10;
-
             padding: 10px 18px;
             border-radius: 20px;
-
             background: rgba(0,0,0,0.75);
             color: #fff;
             font-size: 13px;
             white-space: nowrap;
         }
-
     </style>
-
 </head>
 
 <body>
 
-    <!-- ================================= -->
-    <!-- AR SZENE                          -->
-    <!-- ================================= -->
+    <!-- AR SZENE -->
 
     <a-scene
         vr-mode-ui="enabled: false"
@@ -142,21 +124,14 @@
             debugUIEnabled: false;
         ">
 
-        <!-- Hiro Marker -->
-        <a-marker
-            preset="hiro"
-            id="hiro-marker">
-        </a-marker>
+        <a-marker preset="hiro" id="hiro-marker"></a-marker>
 
-        <!-- Kamera -->
         <a-entity camera></a-entity>
 
     </a-scene>
 
 
-    <!-- ================================= -->
-    <!-- DATENOVERLAY                      -->
-    <!-- ================================= -->
+    <!-- DATENOVERLAY -->
 
     <div id="overlay">
 
@@ -182,27 +157,18 @@
     </div>
 
 
-    <!-- ================================= -->
-    <!-- MARKER STATUS                     -->
-    <!-- ================================= -->
+    <!-- MARKER STATUS -->
 
     <div id="marker-status">
         Hiro-Marker noch nicht erkannt
     </div>
 
 
-    <!-- ================================= -->
-    <!-- JAVASCRIPT                        -->
-    <!-- ================================= -->
-
     <script>
 
-        // ---------------------------------
+        // ==========================================
         // WEBSOCKET KONFIGURATION
-        // ---------------------------------
-
-        // Hier die öffentliche localhost.run-Adresse
-        // aus deinem SSH-Tunnel eintragen.
+        // ==========================================
 
         const TUNNEL_URL =
             "https://7a5a753aca3c52.lhr.life";
@@ -212,9 +178,9 @@
             "/vibration";
 
 
-        // ---------------------------------
+        // ==========================================
         // HTML ELEMENTE
-        // ---------------------------------
+        // ==========================================
 
         const overlay =
             document.getElementById("overlay");
@@ -235,9 +201,9 @@
             document.getElementById("marker-status");
 
 
-        // ---------------------------------
-        // WEBSOCKET VARIABLEN
-        // ---------------------------------
+        // ==========================================
+        // VARIABLEN
+        // ==========================================
 
         let socket = null;
 
@@ -245,45 +211,80 @@
 
         let reconnectDelay = 3000;
 
+        let markerVisible = false;
 
-        // ---------------------------------
+        let lastValue = null;
+
+        let hasReceivedData = false;
+
+
+        // ==========================================
+        // VERBINDUNGSSTATUS
+        // ==========================================
+
+        function setConnectionStatus(text, color) {
+
+            connection.textContent = text;
+
+            connection.style.color = color;
+
+        }
+
+
+        // ==========================================
         // WEBSOCKET VERBINDUNG
-        // ---------------------------------
+        // ==========================================
 
         function connectWebSocket() {
 
-            console.log(
-                "Verbinde mit Node-RED:",
-                WS_URL
+            if (
+                socket &&
+                (
+                    socket.readyState === WebSocket.OPEN ||
+                    socket.readyState === WebSocket.CONNECTING
+                )
+            ) {
+                return;
+            }
+
+            console.log("WebSocket-Verbindung:", WS_URL);
+
+            setConnectionStatus(
+                "WebSocket: Verbindung wird aufgebaut ...",
+                "orange"
             );
 
-            connection.textContent =
-                "WebSocket: Verbindung wird aufgebaut ...";
+            try {
 
-            connection.style.color = "orange";
+                socket = new WebSocket(WS_URL);
 
-            socket = new WebSocket(WS_URL);
+            } catch (error) {
+
+                console.error("WebSocket konnte nicht gestartet werden:", error);
+
+                scheduleReconnect();
+
+                return;
+            }
 
 
-            // Verbindung hergestellt
+            // VERBUNDEN
 
             socket.onopen = function() {
 
-                console.log(
-                    "WebSocket erfolgreich verbunden"
+                console.log("WebSocket erfolgreich verbunden");
+
+                setConnectionStatus(
+                    "WebSocket: Verbunden mit Node-RED",
+                    "#00e69a"
                 );
-
-                connection.textContent =
-                    "WebSocket: Verbunden mit Node-RED";
-
-                connection.style.color = "#00e69a";
 
                 reconnectDelay = 3000;
 
             };
 
 
-            // Daten empfangen
+            // DATEN EMPFANGEN
 
             socket.onmessage = function(event) {
 
@@ -300,70 +301,95 @@
 
                 } catch (error) {
 
-                    console.log(
-                        "Nachricht wird als Text verarbeitet"
-                    );
+                    // Nachricht ist einfacher Text
+                    value = event.data;
 
                 }
+
+                lastValue = value;
+
+                hasReceivedData = true;
 
                 displayVibration(value);
 
             };
 
 
-            // Verbindung geschlossen
+            // VERBINDUNG GESCHLOSSEN
 
-            socket.onclose = function() {
+            socket.onclose = function(event) {
 
                 console.warn(
-                    "WebSocket-Verbindung getrennt"
+                    "WebSocket getrennt:",
+                    event.code,
+                    event.reason
                 );
 
-                connection.textContent =
-                    "WebSocket: Getrennt – Wiederverbindung ...";
-
-                connection.style.color = "orange";
-
-                clearTimeout(reconnectTimer);
-
-                reconnectTimer = setTimeout(
-                    connectWebSocket,
-                    reconnectDelay
+                setConnectionStatus(
+                    "WebSocket: Getrennt – Wiederverbindung ...",
+                    "orange"
                 );
 
-                reconnectDelay = Math.min(
-                    reconnectDelay * 2,
-                    30000
-                );
+                socket = null;
+
+                scheduleReconnect();
 
             };
 
 
-            // Verbindungsfehler
+            // FEHLER
 
             socket.onerror = function(error) {
 
-                console.error(
-                    "WebSocket-Fehler:",
-                    error
+                console.error("WebSocket-Fehler:", error);
+
+                setConnectionStatus(
+                    "WebSocket: Verbindungsfehler",
+                    "red"
                 );
 
-                connection.textContent =
-                    "WebSocket: Verbindungsfehler";
-
-                connection.style.color = "red";
-
-                // onclose übernimmt die Wiederverbindung
-                socket.close();
+                // onclose übernimmt den erneuten Verbindungsversuch
 
             };
 
         }
 
 
-        // ---------------------------------
-        // VIBRATIONSDATEN DARSTELLEN
-        // ---------------------------------
+        // ==========================================
+        // AUTOMATISCHE WIEDERVERBINDUNG
+        // ==========================================
+
+        function scheduleReconnect() {
+
+            if (reconnectTimer !== null) {
+                return;
+            }
+
+            console.log(
+                "Neuer Verbindungsversuch in",
+                reconnectDelay / 1000,
+                "Sekunden"
+            );
+
+            reconnectTimer = setTimeout(function() {
+
+                reconnectTimer = null;
+
+                connectWebSocket();
+
+                reconnectDelay = Math.min(
+                    reconnectDelay * 2,
+                    30000
+                );
+
+            }, reconnectDelay);
+
+        }
+
+
+        // ==========================================
+        // VIBRATIONSDATEN ANZEIGEN
+        // ==========================================
 
         function displayVibration(value) {
 
@@ -389,13 +415,11 @@
                 value !== null
             ) {
 
-                result.textContent =
-                    JSON.stringify(value);
+                result.textContent = JSON.stringify(value);
 
             } else {
 
-                result.textContent =
-                    String(value);
+                result.textContent = String(value);
 
             }
 
@@ -407,8 +431,6 @@
             dataContainer.replaceChildren(row);
 
 
-            // Zeitstempel
-
             lastUpdate.textContent =
                 "Letzte Aktualisierung: " +
                 new Date().toLocaleTimeString("de-DE");
@@ -416,57 +438,54 @@
         }
 
 
-        // ---------------------------------
-        // HIRO MARKER ERKANNT
-        // ---------------------------------
+        // ==========================================
+        // MARKER ERKANNT
+        // ==========================================
 
-        marker.addEventListener(
-            "markerFound",
-            function() {
+        marker.addEventListener("markerFound", function() {
 
-                console.log(
-                    "Hiro-Marker erkannt"
-                );
+            console.log("Hiro-Marker erkannt");
 
-                overlay.style.display = "block";
+            markerVisible = true;
 
-                markerStatus.textContent =
-                    "Hiro-Marker erkannt";
+            overlay.style.display = "block";
 
-                markerStatus.style.color =
-                    "#00e69a";
+            markerStatus.textContent =
+                "Hiro-Marker erkannt";
 
+            markerStatus.style.color = "#00e69a";
+
+            // Letzten Messwert erneut anzeigen
+            if (hasReceivedData) {
+                displayVibration(lastValue);
             }
-        );
+
+        });
 
 
-        // ---------------------------------
-        // HIRO MARKER VERLOREN
-        // ---------------------------------
+        // ==========================================
+        // MARKER VERLOREN
+        // ==========================================
 
-        marker.addEventListener(
-            "markerLost",
-            function() {
+        marker.addEventListener("markerLost", function() {
 
-                console.log(
-                    "Hiro-Marker verloren"
-                );
+            console.log("Hiro-Marker verloren");
 
-                overlay.style.display = "none";
+            markerVisible = false;
 
-                markerStatus.textContent =
-                    "Hiro-Marker nicht erkannt";
+            overlay.style.display = "none";
 
-                markerStatus.style.color =
-                    "#fff";
+            markerStatus.textContent =
+                "Hiro-Marker nicht erkannt";
 
-            }
-        );
+            markerStatus.style.color = "#fff";
+
+        });
 
 
-        // ---------------------------------
+        // ==========================================
         // DEBUG FUNKTIONEN
-        // ---------------------------------
+        // ==========================================
 
         window.fireEventMarkerFound = function() {
 
@@ -486,9 +505,9 @@
         };
 
 
-        // ---------------------------------
+        // ==========================================
         // WEBSOCKET STARTEN
-        // ---------------------------------
+        // ==========================================
 
         connectWebSocket();
 
@@ -496,5 +515,4 @@
     </script>
 
 </body>
-
 </html>
