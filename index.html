@@ -1,85 +1,412 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="de">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Industrie 4.0 AR - Mockup</title>
+
+  <title>Industrie 4.0 AR – P-101</title>
+
+  <!-- A-Frame -->
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
+
+  <!-- AR.js -->
   <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.min.js"></script>
+
   <style>
-    :root { color-scheme: dark; }
-    body {
-      margin: 0;
-      font-family: Arial, sans-serif;
-      overflow: hidden;
+    :root {
+      color-scheme: dark;
     }
 
-    #overlay {
-      display: none;
-      position: fixed;
-      top: 50%;
-      left: 50%;
-      z-index: 10;
-      min-width: 220px;
-      padding: 12px;
-      border: 1px solid rgba(255, 255, 255, 0.45);
-      border-radius: 8px;
-      background: rgba(0, 0, 0, 0.55);
-      backdrop-filter: blur(2px);
-      font-size: 16px;
+    body {
+      margin: 0;
+      padding: 0;
+      font-family: Arial, sans-serif;
+      overflow: hidden;
+      background: #000;
       color: #fff;
     }
 
-    /* Kamera-/Canvas-Darstellung */
+    /* AR-Kamera */
     video, canvas {
       width: 100vw !important;
       height: 100vh !important;
-      object-fit: contain !important; /* weniger Zoom-Eindruck */
+      object-fit: contain !important;
     }
+
+    /* Datenanzeige */
+    #overlay {
+      display: none;
+      position: fixed;
+      top: 12%;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+
+      width: 85%;
+      max-width: 420px;
+
+      padding: 18px;
+      box-sizing: border-box;
+
+      border: 1px solid rgba(0, 255, 150, 0.6);
+      border-radius: 14px;
+
+      background: rgba(0, 0, 0, 0.85);
+      backdrop-filter: blur(8px);
+
+      box-shadow: 0 0 20px rgba(0, 255, 150, 0.15);
+    }
+
+    h2 {
+      margin: 0 0 16px 0;
+      font-size: 20px;
+      color: #00e69a;
+    }
+
+    #connection {
+      font-size: 12px;
+      margin-bottom: 16px;
+      color: orange;
+    }
+
+    .data-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+
+      padding: 14px 4px;
+
+      border-bottom: 1px solid rgba(255,255,255,0.15);
+    }
+
+    .label {
+      font-size: 15px;
+      color: #ccc;
+    }
+
+    .value {
+      font-size: 23px;
+      font-weight: bold;
+      color: #00e69a;
+    }
+
+    #last-update {
+      margin-top: 14px;
+      font-size: 11px;
+      color: #aaa;
+      text-align: right;
+    }
+
+    #marker-status {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 10;
+
+      padding: 10px 18px;
+      border-radius: 20px;
+
+      background: rgba(0,0,0,0.7);
+      color: #fff;
+      font-size: 13px;
+      white-space: nowrap;
+    }
+
   </style>
 </head>
+
 <body>
+
+  <!-- AR-Szene -->
   <a-scene
     vr-mode-ui="enabled: false"
     renderer="logarithmicDepthBuffer: true"
     embedded
-    arjs="sourceType: webcam; facingMode: environment; sourceWidth: 1280; sourceHeight: 720; displayWidth: 1280; displayHeight: 720; debugUIEnabled: false;">
+    arjs="
+      sourceType: webcam;
+      facingMode: environment;
+      sourceWidth: 1280;
+      sourceHeight: 720;
+      displayWidth: 1280;
+      displayHeight: 720;
+      debugUIEnabled: false;
+    ">
+
+    <!-- Hiro-Marker -->
     <a-marker preset="hiro" id="hiro-marker"></a-marker>
+
+    <!-- Kamera -->
     <a-entity camera></a-entity>
+
   </a-scene>
 
+  <!-- AR-Datenoverlay -->
   <div id="overlay">
-    <div id="marker-count">The Marker was not yet found</div>
+
+    <h2>Industrie 4.0 – Maschine P-101</h2>
+
+    <div id="connection">
+      WebSocket: Verbindung wird aufgebaut ...
+    </div>
+
+    <div id="data-container">
+
+      <div class="data-row">
+        <span class="label">Vibration</span>
+        <span class="value">Warte auf Daten ...</span>
+      </div>
+
+    </div>
+
+    <div id="last-update">
+      Noch keine Aktualisierung
+    </div>
+
   </div>
 
+  <!-- Marker-Status -->
+  <div id="marker-status">
+    Hiro-Marker noch nicht erkannt
+  </div>
+
+
   <script>
-    const overlay = document.getElementById('overlay');
-    const hiroMarker = document.getElementById('hiro-marker');
-    const markerCount = document.getElementById('marker-count');
-    let markerFoundCount = 0;
 
-    hiroMarker.addEventListener('markerFound', () => {
-      console.debug('Marker found');
-      markerFoundCount += 1;
-      markerCount.textContent = `The Marker was found the ${markerFoundCount} time`;
-      overlay.style.display = 'block';
-    });
+    // ==========================================
+    // WEBSOCKET KONFIGURATION
+    // ==========================================
 
-    hiroMarker.addEventListener('markerLost', () => {
-      console.debug('Marker lost');
-      overlay.style.display = 'none';
-    });
+    const WS_URL = "ws://rpi08.local:1880/vibration";
 
-    /* global functions for debugging */
-    window.fireEventMarkerFound = () => {
-      const event = new CustomEvent('markerFound');
-      hiroMarker.dispatchEvent(event);
+    // ==========================================
+    // HTML ELEMENTE
+    // ==========================================
+
+    const overlay = document.getElementById("overlay");
+
+    const marker = document.getElementById("hiro-marker");
+
+    const connection = document.getElementById("connection");
+
+    const dataContainer = document.getElementById("data-container");
+
+    const lastUpdate = document.getElementById("last-update");
+
+    const markerStatus = document.getElementById("marker-status");
+
+
+    // ==========================================
+    // VARIABLEN
+    // ==========================================
+
+    let socket = null;
+
+    let markerVisible = false;
+
+    let reconnectTimer = null;
+
+    let reconnectDelay = 3000;
+
+
+    // ==========================================
+    // WEBSOCKET VERBINDUNG
+    // ==========================================
+
+    function connectWebSocket() {
+
+      console.log("Verbinde mit:", WS_URL);
+
+      socket = new WebSocket(WS_URL);
+
+      socket.onopen = function() {
+
+        console.log("WebSocket verbunden");
+
+        connection.textContent = "WebSocket: Verbunden";
+
+        connection.style.color = "#00e69a";
+
+        reconnectDelay = 3000;
+
+      };
+
+
+      // ========================================
+      // DATEN EMPFANGEN
+      // ========================================
+
+      socket.onmessage = function(event) {
+
+        console.log("Empfangene Daten:", event.data);
+
+        let value;
+
+        try {
+
+          value = JSON.parse(event.data);
+
+        } catch (error) {
+
+          value = event.data;
+
+        }
+
+        displayVibration(value);
+
+      };
+
+
+      // ========================================
+      // VERBINDUNG GESCHLOSSEN
+      // ========================================
+
+      socket.onclose = function() {
+
+        console.warn("WebSocket getrennt");
+
+        connection.textContent = "WebSocket: Getrennt – Wiederverbindung ...";
+
+        connection.style.color = "orange";
+
+        clearTimeout(reconnectTimer);
+
+        reconnectTimer = setTimeout(
+          connectWebSocket,
+          reconnectDelay
+        );
+
+        reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+
+      };
+
+
+      // ========================================
+      // FEHLER
+      // ========================================
+
+      socket.onerror = function(error) {
+
+        console.error("WebSocket Fehler:", error);
+
+        connection.textContent = "WebSocket: Verbindungsfehler";
+
+        connection.style.color = "red";
+
+        socket.close();
+
+      };
+
     }
 
-    window.fireEventMarkerLost = () => {
-      const event = new CustomEvent('markerLost');
-      hiroMarker.dispatchEvent(event);
+
+    // ==========================================
+    // VIBRATIONSDATEN ANZEIGEN
+    // ==========================================
+
+    function displayVibration(value) {
+
+      const row = document.createElement("div");
+
+      row.className = "data-row";
+
+      const label = document.createElement("span");
+
+      label.className = "label";
+
+      label.textContent = "Vibration P-101";
+
+
+      const result = document.createElement("span");
+
+      result.className = "value";
+
+      result.textContent =
+        typeof value === "object" && value !== null
+          ? JSON.stringify(value)
+          : String(value);
+
+
+      row.appendChild(label);
+
+      row.appendChild(result);
+
+      dataContainer.replaceChildren(row);
+
+
+      // Zeitstempel aktualisieren
+
+      lastUpdate.textContent =
+        "Letzte Aktualisierung: " +
+        new Date().toLocaleTimeString("de-DE");
+
     }
+
+
+    // ==========================================
+    // HIRO MARKER ERKANNT
+    // ==========================================
+
+    marker.addEventListener("markerFound", function() {
+
+      console.log("Hiro-Marker erkannt");
+
+      markerVisible = true;
+
+      overlay.style.display = "block";
+
+      markerStatus.textContent = "Hiro-Marker erkannt";
+
+      markerStatus.style.color = "#00e69a";
+
+    });
+
+
+    // ==========================================
+    // HIRO MARKER VERLOREN
+    // ==========================================
+
+    marker.addEventListener("markerLost", function() {
+
+      console.log("Hiro-Marker verloren");
+
+      markerVisible = false;
+
+      overlay.style.display = "none";
+
+      markerStatus.textContent = "Hiro-Marker nicht erkannt";
+
+      markerStatus.style.color = "#fff";
+
+    });
+
+
+    // ==========================================
+    // DEBUG FUNKTIONEN
+    // ==========================================
+
+    window.fireEventMarkerFound = function() {
+
+      marker.dispatchEvent(new CustomEvent("markerFound"));
+
+    };
+
+
+    window.fireEventMarkerLost = function() {
+
+      marker.dispatchEvent(new CustomEvent("markerLost"));
+
+    };
+
+
+    // ==========================================
+    // WEBSOCKET STARTEN
+    // ==========================================
+
+    connectWebSocket();
+
+
   </script>
+
 </body>
 </html>
