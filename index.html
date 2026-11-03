@@ -14,6 +14,7 @@
     <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.min.js"></script>
 
     <style>
+
         * {
             box-sizing: border-box;
         }
@@ -104,10 +105,13 @@
             font-size: 13px;
             white-space: nowrap;
         }
+
     </style>
+
 </head>
 
 <body>
+
 
     <!-- AR SZENE -->
 
@@ -125,7 +129,9 @@
             debugUIEnabled: false;
         ">
 
-        <a-marker preset="hiro" id="hiro-marker">
+        <a-marker
+            preset="hiro"
+            id="hiro-marker">
         </a-marker>
 
         <a-entity camera></a-entity>
@@ -146,8 +152,15 @@
         <div id="data-container">
 
             <div class="data-row">
-                <span class="label">Vibration P-101</span>
-                <span class="value">Warte auf Daten ...</span>
+
+                <span class="label">
+                    Vibration P-101
+                </span>
+
+                <span class="value">
+                    Warte auf Daten ...
+                </span>
+
             </div>
 
         </div>
@@ -204,8 +217,10 @@
 
 
         // ==========================================
-        // VARIABLEN
+        // GLOBALE VARIABLEN
         // ==========================================
+
+        window.socket = null;
 
         let reconnectTimer = null;
 
@@ -215,24 +230,25 @@
 
         let hasReceivedData = false;
 
-        let socket = null;
-
 
         // ==========================================
-        // DEBUG FUNKTIONEN
+        // DEBUG STATUS
         // ==========================================
 
         window.getSocketStatus = function() {
 
             return {
+
                 url: WS_URL,
 
-                state: socket
-                    ? socket.readyState
+                state: window.socket
+                    ? window.socket.readyState
                     : "kein Socket",
 
                 connected:
-                    socket?.readyState === WebSocket.OPEN
+                    window.socket?.readyState ===
+                    WebSocket.OPEN
+
             };
 
         };
@@ -258,16 +274,19 @@
         function connectWebSocket() {
 
             if (
-                socket &&
+                window.socket &&
                 (
-                    socket.readyState === WebSocket.OPEN ||
-                    socket.readyState === WebSocket.CONNECTING
+                    window.socket.readyState === WebSocket.OPEN ||
+                    window.socket.readyState === WebSocket.CONNECTING
                 )
             ) {
                 return;
             }
 
-            console.log("WebSocket-Verbindung:", WS_URL);
+            console.log(
+                "WebSocket-Verbindung:",
+                WS_URL
+            );
 
             setConnectionStatus(
                 "WebSocket: Verbindung wird aufgebaut ...",
@@ -276,7 +295,7 @@
 
             try {
 
-                socket = new WebSocket(WS_URL);
+                window.socket = new WebSocket(WS_URL);
 
             } catch (error) {
 
@@ -285,18 +304,28 @@
                     error
                 );
 
+                setConnectionStatus(
+                    "WebSocket: Startfehler",
+                    "red"
+                );
+
                 scheduleReconnect();
 
                 return;
             }
 
 
-            // VERBUNDEN
+            const currentSocket = window.socket;
 
-            socket.onopen = function() {
+
+            // ======================================
+            // VERBUNDEN
+            // ======================================
+
+            currentSocket.onopen = function() {
 
                 console.log(
-                    "WebSocket erfolgreich verbunden"
+                    "VERBUNDEN MIT NODE-RED"
                 );
 
                 setConnectionStatus(
@@ -309,12 +338,14 @@
             };
 
 
+            // ======================================
             // DATEN EMPFANGEN
+            // ======================================
 
-            socket.onmessage = function(event) {
+            currentSocket.onmessage = function(event) {
 
                 console.log(
-                    "OPC-UA-Daten empfangen:",
+                    "DATEN VON NODE-RED:",
                     event.data
                 );
 
@@ -326,7 +357,9 @@
 
                 } catch (error) {
 
-                    value = event.data;
+                    console.log(
+                        "Einfache Textnachricht empfangen"
+                    );
 
                 }
 
@@ -339,43 +372,53 @@
             };
 
 
+            // ======================================
             // VERBINDUNG GESCHLOSSEN
+            // ======================================
 
-            socket.onclose = function(event) {
+            currentSocket.onclose = function(event) {
 
                 console.warn(
-                    "WebSocket getrennt:",
+                    "WEBSOCKET GESCHLOSSEN:",
                     event.code,
                     event.reason
                 );
+
+                if (window.socket !== currentSocket) {
+                    return;
+                }
 
                 setConnectionStatus(
                     "WebSocket: Getrennt – Wiederverbindung ...",
                     "orange"
                 );
 
-                if (socket === this) {
-                    socket = null;
-                }
+                window.socket = null;
 
                 scheduleReconnect();
 
             };
 
 
+            // ======================================
             // FEHLER
+            // ======================================
 
-            socket.onerror = function(error) {
+            currentSocket.onerror = function(error) {
 
                 console.error(
-                    "WebSocket-Fehler:",
+                    "WEBSOCKET FEHLER:",
                     error
                 );
 
-                setConnectionStatus(
-                    "WebSocket: Verbindungsfehler",
-                    "red"
-                );
+                if (window.socket === currentSocket) {
+
+                    setConnectionStatus(
+                        "WebSocket: Verbindungsfehler",
+                        "red"
+                    );
+
+                }
 
             };
 
@@ -420,19 +463,23 @@
 
         function displayVibration(value) {
 
-            const row = document.createElement("div");
+            const row =
+                document.createElement("div");
 
             row.className = "data-row";
 
 
-            const label = document.createElement("span");
+            const label =
+                document.createElement("span");
 
             label.className = "label";
 
-            label.textContent = "Vibration P-101";
+            label.textContent =
+                "Vibration P-101";
 
 
-            const result = document.createElement("span");
+            const result =
+                document.createElement("span");
 
             result.className = "value";
 
@@ -440,7 +487,7 @@
             let measurement = value;
 
 
-            // JSON-Nachricht verarbeiten
+            // JSON-String verarbeiten
 
             if (typeof value === "string") {
 
@@ -457,7 +504,7 @@
             }
 
 
-            // JSON-Objekt mit Messwert
+            // JSON-Objekt auswerten
 
             if (
                 typeof measurement === "object" &&
@@ -508,7 +555,9 @@
             "markerFound",
             function() {
 
-                console.log("Hiro-Marker erkannt");
+                console.log(
+                    "HIRO-MARKER ERKANNT"
+                );
 
                 overlay.style.display = "block";
 
@@ -518,8 +567,6 @@
                 markerStatus.style.color =
                     "#00e69a";
 
-
-                // Letzten Messwert erneut anzeigen
 
                 if (hasReceivedData) {
 
@@ -539,21 +586,24 @@
             "markerLost",
             function() {
 
-                console.log("Hiro-Marker verloren");
+                console.log(
+                    "HIRO-MARKER VERLOREN"
+                );
 
                 overlay.style.display = "none";
 
                 markerStatus.textContent =
                     "Hiro-Marker nicht erkannt";
 
-                markerStatus.style.color = "#fff";
+                markerStatus.style.color =
+                    "#fff";
 
             }
         );
 
 
         // ==========================================
-        // DEBUG FUNKTIONEN
+        // MANUELLE DEBUG FUNKTIONEN
         // ==========================================
 
         window.fireEventMarkerFound = function() {
