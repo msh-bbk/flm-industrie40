@@ -13,8 +13,8 @@
   <script src="https://cdn.jsdelivr.net/gh/AR-js-org/AR.js@3.4.5/aframe/build/aframe-ar.min.js"></script>
 
   <style>
-    :root {
-      color-scheme: dark;
+    * {
+      box-sizing: border-box;
     }
 
     body {
@@ -26,14 +26,12 @@
       color: #fff;
     }
 
-    /* AR-Kamera */
     video, canvas {
       width: 100vw !important;
       height: 100vh !important;
       object-fit: contain !important;
     }
 
-    /* Datenanzeige */
     #overlay {
       display: none;
       position: fixed;
@@ -41,24 +39,18 @@
       left: 50%;
       transform: translateX(-50%);
       z-index: 10;
-
-      width: 85%;
+      width: 88%;
       max-width: 420px;
-
       padding: 18px;
-      box-sizing: border-box;
-
       border: 1px solid rgba(0, 255, 150, 0.6);
       border-radius: 14px;
-
-      background: rgba(0, 0, 0, 0.85);
+      background: rgba(0, 0, 0, 0.87);
       backdrop-filter: blur(8px);
-
       box-shadow: 0 0 20px rgba(0, 255, 150, 0.15);
     }
 
     h2 {
-      margin: 0 0 16px 0;
+      margin: 0 0 16px;
       font-size: 20px;
       color: #00e69a;
     }
@@ -73,9 +65,7 @@
       display: flex;
       justify-content: space-between;
       align-items: center;
-
       padding: 14px 4px;
-
       border-bottom: 1px solid rgba(255,255,255,0.15);
     }
 
@@ -88,6 +78,8 @@
       font-size: 23px;
       font-weight: bold;
       color: #00e69a;
+      overflow-wrap: anywhere;
+      text-align: right;
     }
 
     #last-update {
@@ -103,16 +95,13 @@
       left: 50%;
       transform: translateX(-50%);
       z-index: 10;
-
       padding: 10px 18px;
       border-radius: 20px;
-
       background: rgba(0,0,0,0.7);
       color: #fff;
       font-size: 13px;
       white-space: nowrap;
     }
-
   </style>
 </head>
 
@@ -133,15 +122,13 @@
       debugUIEnabled: false;
     ">
 
-    <!-- Hiro-Marker -->
     <a-marker preset="hiro" id="hiro-marker"></a-marker>
 
-    <!-- Kamera -->
     <a-entity camera></a-entity>
 
   </a-scene>
 
-  <!-- AR-Datenoverlay -->
+  <!-- Datenanzeige -->
   <div id="overlay">
 
     <h2>Industrie 4.0 – Maschine P-101</h2>
@@ -151,12 +138,10 @@
     </div>
 
     <div id="data-container">
-
       <div class="data-row">
         <span class="label">Vibration</span>
         <span class="value">Warte auf Daten ...</span>
       </div>
-
     </div>
 
     <div id="last-update">
@@ -165,7 +150,6 @@
 
   </div>
 
-  <!-- Marker-Status -->
   <div id="marker-status">
     Hiro-Marker noch nicht erkannt
   </div>
@@ -174,25 +158,28 @@
   <script>
 
     // ==========================================
-    // WEBSOCKET KONFIGURATION
+    // WEBSOCKET ÜBER LOCALHOST.RUN
     // ==========================================
 
-    const WS_URL = "ws://rpi08.local:1880/vibration";
+    // Hier deine öffentliche localhost.run-Adresse eintragen!
+    // Beispiel: https://abc123.localhost.run
+
+    const TUNNEL_URL = "https://DEINE-ADRESSE.localhost.run";
+
+    const WS_URL =
+      TUNNEL_URL.replace(/^https:/, "wss:") +
+      "/vibration";
+
 
     // ==========================================
     // HTML ELEMENTE
     // ==========================================
 
     const overlay = document.getElementById("overlay");
-
     const marker = document.getElementById("hiro-marker");
-
     const connection = document.getElementById("connection");
-
     const dataContainer = document.getElementById("data-container");
-
     const lastUpdate = document.getElementById("last-update");
-
     const markerStatus = document.getElementById("marker-status");
 
 
@@ -201,11 +188,7 @@
     // ==========================================
 
     let socket = null;
-
-    let markerVisible = false;
-
     let reconnectTimer = null;
-
     let reconnectDelay = 3000;
 
 
@@ -215,7 +198,7 @@
 
     function connectWebSocket() {
 
-      console.log("Verbinde mit:", WS_URL);
+      console.log("WebSocket-Verbindung:", WS_URL);
 
       socket = new WebSocket(WS_URL);
 
@@ -224,7 +207,6 @@
         console.log("WebSocket verbunden");
 
         connection.textContent = "WebSocket: Verbunden";
-
         connection.style.color = "#00e69a";
 
         reconnectDelay = 3000;
@@ -238,18 +220,14 @@
 
       socket.onmessage = function(event) {
 
-        console.log("Empfangene Daten:", event.data);
+        console.log("OPC-UA-Daten:", event.data);
 
         let value;
 
         try {
-
           value = JSON.parse(event.data);
-
         } catch (error) {
-
           value = event.data;
-
         }
 
         displayVibration(value);
@@ -258,14 +236,15 @@
 
 
       // ========================================
-      // VERBINDUNG GESCHLOSSEN
+      // VERBINDUNG GETRENNT
       // ========================================
 
       socket.onclose = function() {
 
         console.warn("WebSocket getrennt");
 
-        connection.textContent = "WebSocket: Getrennt – Wiederverbindung ...";
+        connection.textContent =
+          "WebSocket: Getrennt – Wiederverbindung ...";
 
         connection.style.color = "orange";
 
@@ -276,7 +255,10 @@
           reconnectDelay
         );
 
-        reconnectDelay = Math.min(reconnectDelay * 2, 30000);
+        reconnectDelay = Math.min(
+          reconnectDelay * 2,
+          30000
+        );
 
       };
 
@@ -287,10 +269,9 @@
 
       socket.onerror = function(error) {
 
-        console.error("WebSocket Fehler:", error);
+        console.error("WebSocket-Fehler:", error);
 
         connection.textContent = "WebSocket: Verbindungsfehler";
-
         connection.style.color = "red";
 
         socket.close();
@@ -321,20 +302,21 @@
 
       result.className = "value";
 
-      result.textContent =
-        typeof value === "object" && value !== null
-          ? JSON.stringify(value)
-          : String(value);
+      if (
+        typeof value === "object" &&
+        value !== null
+      ) {
+        result.textContent = JSON.stringify(value);
+      } else {
+        result.textContent = String(value);
+      }
 
 
       row.appendChild(label);
-
       row.appendChild(result);
 
       dataContainer.replaceChildren(row);
 
-
-      // Zeitstempel aktualisieren
 
       lastUpdate.textContent =
         "Letzte Aktualisierung: " +
@@ -350,8 +332,6 @@
     marker.addEventListener("markerFound", function() {
 
       console.log("Hiro-Marker erkannt");
-
-      markerVisible = true;
 
       overlay.style.display = "block";
 
@@ -370,8 +350,6 @@
 
       console.log("Hiro-Marker verloren");
 
-      markerVisible = false;
-
       overlay.style.display = "none";
 
       markerStatus.textContent = "Hiro-Marker nicht erkannt";
@@ -387,14 +365,18 @@
 
     window.fireEventMarkerFound = function() {
 
-      marker.dispatchEvent(new CustomEvent("markerFound"));
+      marker.dispatchEvent(
+        new CustomEvent("markerFound")
+      );
 
     };
 
 
     window.fireEventMarkerLost = function() {
 
-      marker.dispatchEvent(new CustomEvent("markerLost"));
+      marker.dispatchEvent(
+        new CustomEvent("markerLost")
+      );
 
     };
 
@@ -404,7 +386,6 @@
     // ==========================================
 
     connectWebSocket();
-
 
   </script>
 
